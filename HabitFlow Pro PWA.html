@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>HabitFlow Pro</title>
+    
+    <!-- PWA Meta Tags for Android / iOS -->
+    <meta name="theme-color" content="#8b5cf6">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="HabitFlow">
+    <link rel="apple-touch-icon" href="https://placehold.co/192x192/8b5cf6/ffffff?text=HF">
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#f5f3ff',
+                            100: '#ede9fe',
+                            500: '#8b5cf6',
+                            600: '#7c3aed',
+                            700: '#6d28d9',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #f8fafc;
+            color: #0f172a;
+            -webkit-tap-highlight-color: transparent;
+        }
+        ::-webkit-scrollbar {
+            width: 5px;
+            height: 5px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #e2e8f0;
+            border-radius: 9999px;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between font-sans antialiased bg-slate-50/50">
+
+    <script>
+        // Dynamic Manifest Injection for PWA installation
+        const manifestData = {
+            "name": "HabitFlow Pro",
+            "short_name": "HabitFlow",
+            "start_url": "./habit_tracker_pwa.html",
+            "display": "standalone",
+            "background_color": "#f8fafc",
+            "theme_color": "#8b5cf6",
+            "icons": [
+                {
+                    "src": "https://placehold.co/192x192/8b5cf6/ffffff?text=HF",
+                    "sizes": "192x192",
+                    "type": "image/png"
+                },
+                {
+                    "src": "https://placehold.co/512x512/8b5cf6/ffffff?text=HF",
+                    "sizes": "512x512",
+                    "type": "image/png"
+                }
+            ]
+        };
+        const stringManifest = JSON.stringify(manifestData);
+        const blob = new Blob([stringManifest], {type: 'application/json'});
+        const manifestURL = URL.createObjectURL(blob);
+        const manifestLink = document.createElement('link');
+        manifestLink.rel = 'manifest';
+        manifestLink.href = manifestURL;
+        document.head.appendChild(manifestLink);
+
+        // Service Worker Registration for Offline Capability
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                const swCode = `
+                    const CACHE_NAME = 'habitflow-v1';
+                    const urlsToCache = ['./', './habit_tracker_pwa.html'];
+                    self.addEventListener('install', event => {
+                        event.waitUntil(
+                            caches.open(CACHE_NAME).then(cache => cache.addAll(urlsToCache))
+                        );
+                    });
+                    self.addEventListener('fetch', event => {
+                        event.respondWith(
+                            caches.match(event.request).then(response => response || fetch(event.request))
+                        );
+                    });
+                `;
+                const swBlob = new Blob([swCode], {type: 'text/javascript'});
+                const swURL = URL.createObjectURL(swBlob);
+                navigator.serviceWorker.register(swURL).then(reg => {
+                    console.log('ServiceWorker registered successfully:', reg.scope);
+                }).catch(err => {
+                    console.log('ServiceWorker registration failed:', err);
+                });
+            });
+        }
+    </script>
+
+    <header class="w-full bg-white/80 backdrop-blur-md border-b border-slate-100 sticky top-0 z-30 shadow-xs">
+        <div class="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
+            <div class="flex items-center space-x-2.5">
+                <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-violet-600 to-indigo-500 text-white flex items-center justify-center font-bold text-base shadow-md shadow-violet-200">
+                    <i class="fa-solid fa-sparkles"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-sm text-slate-800 tracking-tight">HabitFlow Pro</h1>
+                    <p class="text-[11px] text-slate-400 font-medium" id="header-date">Memuat tanggal...</p>
+                </div>
+            </div>
+            <div class="flex items-center space-x-1">
+                <!-- PWA Install Button (hidden until prompt triggers) -->
+                <button id="install-btn" onclick="installPWA()" class="hidden px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-500 text-white shadow-sm flex items-center space-x-1 animate-pulse">
+                    <i class="fa-solid fa-download text-[10px]"></i>
+                    <span>Install</span>
+                </button>
+                <!-- Navigation Tabs -->
+                <div class="flex items-center space-x-1 bg-slate-100/80 p-1 rounded-xl border border-slate-200/60">
+                    <button onclick="switchTab('tracker')" id="nav-tracker" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-white text-slate-800 shadow-xs transition-all">Hari Ini</button>
+                    <button onclick="switchTab('weekly')" id="nav-weekly" class="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:text-slate-800 transition-all">Mingguan</button>
+                    <button onclick="switchTab('history')" id="nav-history" class="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:text-slate-800 transition-all">Kalender</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-4xl w-full mx-auto px-4 py-6 flex-grow space-y-6">
+
+        <!-- TAB 1: DAILY TRACKER -->
+        <div id="tab-tracker" class="space-y-6">
+            <div class="bg-white p-4 rounded-2xl border border-slate-100 shadow-xs flex items-center justify-between">
+                <button onclick="changeDate(-1)" class="w-9 h-9 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-600 flex items-center justify-center transition border border-slate-100/80">
+                    <i class="fa-solid fa-chevron-left text-xs"></i>
+                </button>
+                <div class="text-center">
+                    <h2 id="current-day-title" class="font-bold text-sm text-slate-800">Hari Ini</h2>
+                    <p id="current-date-subtitle" class="text-xs text-slate-400">29 September 2026</p>
+                </div>
+                <button onclick="changeDate(1)" class="w-9 h-9 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-600 flex items-center justify-center transition border border-slate-100/80">
+                    <i class="fa-solid fa-chevron-right text-xs"></i>
+                </button>
+            </div>
+
+            <!-- Stats & Progress Card -->
+            <div class="bg-gradient-to-br from-violet-600 via-indigo-600 to-purple-700 rounded-3xl p-6 text-white shadow-xl shadow-violet-500/15 relative overflow-hidden">
+                <div class="absolute -right-10 -bottom-10 w-44 h-44 bg-white/10 rounded-full blur-2xl pointer-events-none"></div>
+                <div class="absolute right-20 top-0 w-24 h-24 bg-pink-500/20 rounded-full blur-xl pointer-events-none"></div>
+                
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-5">
+                    <div>
+                        <span class="text-[11px] uppercase tracking-wider font-semibold text-violet-200">Progres Harian</span>
+                        <h3 id="progress-text" class="text-3xl font-extrabold mt-0.5 tracking-tight">0/9 selesai — 0%</h3>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <div class="bg-white/10 backdrop-blur-md px-3.5 py-2 rounded-2xl text-center border border-white/15">
+                            <span class="block text-[10px] uppercase tracking-wider text-violet-200 font-medium">Streak</span>
+                            <span id="streak-count" class="font-bold text-sm">🔥 0 Hari</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="w-full bg-black/20 rounded-full h-3 overflow-hidden p-0.5">
+                    <div id="progress-bar-fill" class="bg-gradient-to-r from-emerald-300 to-teal-400 h-2 rounded-full transition-all duration-700 shadow-sm" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-between pt-1">
+                <div>
+                    <h3 class="font-bold text-sm text-slate-800 tracking-tight">Daftar Kebiasaan</h3>
+                    <p class="text-xs text-slate-400">Klik lingkaran untuk menyelesaikan misi hari ini</p>
+                </div>
+                <button onclick="openAddHabitModal()" class="text-xs bg-violet-600 hover:bg-violet-700 text-white font-semibold px-3.5 py-2 rounded-xl transition-all shadow-sm shadow-violet-200 flex items-center space-x-1.5">
+                    <i class="fa-solid fa-plus text-xs"></i>
+                    <span>Kebiasaan Baru</span>
+                </button>
+            </div>
+
+            <div id="habits-container" class="space-y-3"></div>
+        </div>
+
+        <!-- TAB 2: WEEKLY VIEW -->
+        <div id="tab-weekly" class="hidden space-y-6">
+            <div class="bg-white p-5 rounded-3xl border border-slate-100 shadow-xs space-y-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="font-bold text-base text-slate-800">Tinjauan Mingguan</h3>
+                        <p class="text-xs text-slate-400" id="weekly-range-subtitle">Minggu ini</p>
+                    </div>
+                    <div class="flex items-center space-x-1.5">
+                        <button onclick="changeWeek(-1)" class="w-8 h-8 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-600 flex items-center justify-center border border-slate-100">
+                            <i class="fa-solid fa-chevron-left text-xs"></i>
+                        </button>
+                        <button onclick="changeWeek(1)" class="w-8 h-8 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-600 flex items-center justify-center border border-slate-100">
+                            <i class="fa-solid fa-chevron-right text-xs"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="overflow-x-auto pb-2">
+                    <div id="weekly-matrix" class="min-w-[650px] space-y-2"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 3: MONTHLY CALENDAR & HISTORY -->
+        <div id="tab-history" class="hidden space-y-6">
+            <div class="bg-white p-6 rounded-3xl border border-slate-100 shadow-xs space-y-5">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="font-bold text-base text-slate-800">Kalender Aktivitas Bulanan</h3>
+                        <p class="text-xs text-slate-400">Pantau konsistensi habit Anda sepanjang bulan</p>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <button onclick="changeMonth(-1)" class="w-8 h-8 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-600 flex items-center justify-center border border-slate-100">
+                            <i class="fa-solid fa-chevron-left text-xs"></i>
+                        </button>
+                        <span id="calendar-month-year" class="text-xs font-bold text-slate-700 min-w-[110px] text-center">September 2026</span>
+                        <button onclick="changeMonth(1)" class="w-8 h-8 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-600 flex items-center justify-center border border-slate-100">
+                            <i class="fa-solid fa-chevron-right text-xs"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-7 gap-2 text-center text-xs text-slate-400 font-semibold mb-1">
+                    <span>Sen</span><span>Sel</span><span>Rab</span><span>Kam</span><span>Jum</span><span>Sab</span><span>Min</span>
+                </div>
+                <div id="calendar-grid" class="grid grid-cols-7 gap-2 text-xs"></div>
+
+                <div class="flex items-center justify-center space-x-4 pt-3 border-t border-slate-100 text-[11px] text-slate-500">
+                    <div class="flex items-center space-x-1.5">
+                        <div class="w-3 h-3 rounded-md bg-emerald-500"></div>
+                        <span>Selesai Penuh</span>
+                    </div>
+                    <div class="flex items-center space-x-1.5">
+                        <div class="w-3 h-3 rounded-md bg-violet-100 border border-violet-200"></div>
+                        <span>Sebagian</span>
+                    </div>
+                    <div class="flex items-center space-x-1.5">
+                        <div class="w-3 h-3 rounded-md bg-slate-50 border border-slate-100"></div>
+                        <span>Kosong</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div class="bg-white p-5 rounded-3xl border border-slate-100 shadow-xs flex items-center space-x-4">
+                    <div class="w-12 h-12 rounded-2xl bg-violet-50 text-violet-600 flex items-center justify-center text-lg font-bold">
+                        <i class="fa-solid fa-circle-check"></i>
+                    </div>
+                    <div>
+                        <span class="block text-slate-400 text-xs font-medium">Total Selesai Akumulatif</span>
+                        <span id="stat-total-completed" class="text-2xl font-extrabold text-slate-800">0</span>
+                    </div>
+                </div>
+                <div class="bg-white p-5 rounded-3xl border border-slate-100 shadow-xs flex items-center space-x-4">
+                    <div class="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-lg font-bold">
+                        <i class="fa-solid fa-fire"></i>
+                    </div>
+                    <div>
+                        <span class="block text-slate-400 text-xs font-medium">Streak Hari Ini</span>
+                        <span id="stat-current-streak" class="text-2xl font-extrabold text-slate-800">0 Hari</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <div id="habit-modal" class="fixed inset-0 bg-slate-950/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white w-full max-w-sm rounded-3xl shadow-2xl border border-slate-100 overflow-hidden transform transition-all">
+            <div class="p-5 border-b border-slate-100 flex items-center justify-between">
+                <h3 id="modal-title" class="font-bold text-sm text-slate-800">Tambah Kebiasaan Baru</h3>
+                <button onclick="closeHabitModal()" class="w-8 h-8 rounded-xl bg-slate-50 text-slate-400 hover:text-slate-600 flex items-center justify-center transition">
+                    <i class="fa-solid fa-xmark text-xs"></i>
+                </button>
+            </div>
+            <div class="p-5 space-y-4">
+                <input type="hidden" id="edit-habit-id">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">Nama Kebiasaan</label>
+                    <input type="text" id="habit-name-input" placeholder="Contoh: Meditasi 10 menit" class="w-full px-4 py-3 rounded-2xl border border-slate-200/80 focus:outline-none focus:ring-2 focus:ring-violet-500/50 text-sm bg-slate-50/50">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">Pilih Ikon</label>
+                    <div class="grid grid-cols-6 gap-2 max-h-40 overflow-y-auto p-1" id="icon-picker"></div>
+                    <input type="hidden" id="selected-icon" value="fa-circle-check">
+                </div>
+            </div>
+            <div class="p-4 bg-slate-50/80 border-t border-slate-100 flex justify-end space-x-2">
+                <button onclick="closeHabitModal()" class="px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-200/60 transition">Batal</button>
+                <button onclick="saveHabit()" class="px-5 py-2.5 rounded-xl text-xs font-semibold bg-violet-600 text-white hover:bg-violet-700 transition shadow-sm shadow-violet-200">Simpan</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast-notification" class="fixed bottom-5 right-5 bg-slate-900 text-white text-xs px-4 py-3 rounded-2xl shadow-xl transform translate-y-20 opacity-0 transition-all duration-300 z-50 flex items-center space-x-2 border border-slate-800">
+        <i id="toast-icon" class="fa-solid fa-circle-check text-emerald-400"></i>
+        <span id="toast-message">Pesan notifikasi</span>
+    </div>
+
+    <script>
+        let deferredPrompt;
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            const installBtn = document.getElementById('install-btn');
+            if (installBtn) {
+                installBtn.classList.remove('hidden');
+            }
+        });
+
+        function installPWA() {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                deferredPrompt.userChoice.then((choiceResult) => {
+                    if (choiceResult.outcome === 'accepted') {
+                        console.log('User accepted the install prompt');
+                    }
+                    deferredPrompt = null;
+                    document.getElementById('install-btn').classList.add('hidden');
+                });
+            }
+        }
+
+        const defaultHabits = [
+            { id: '1', name: 'Bangun pagi', icon: 'fa-sun' },
+            { id: '2', name: 'Minum air putih', icon: 'fa-glass-water' },
+            { id: '3', name: 'Belajar hal unik', icon: 'fa-lightbulb' },
+            { id: '4', name: 'Membaca', icon: 'fa-book-open' },
+            { id: '5', name: 'Olahraga/jalan kaki', icon: 'fa-person-running' },
+            { id: '6', name: 'Belajar coding', icon: 'fa-code' },
+            { id: '7', name: 'Mengurangi screen time', icon: 'fa-mobile-screen-button' },
+            { id: '8', name: 'Tidur tepat waktu', icon: 'fa-bed' },
+            { id: '9', name: 'Evaluasi mata kuliah', icon: 'fa-graduation-cap' }
+        ];
+
+        const availableIcons = [
+            'fa-circle-check', 'fa-sun', 'fa-glass-water', 'fa-lightbulb', 
+            'fa-book-open', 'fa-person-running', 'fa-code', 'fa-mobile-screen-button', 
+            'fa-bed', 'fa-graduation-cap', 'fa-heart', 'fa-dumbbell', 
+            'fa-brain', 'fa-laptop', 'fa-mug-hot', 'fa-pen-nib', 'fa-fire', 'fa-star'
+        ];
+
+        let habits = [];
+        let habitLogs = {};
+        let currentDate = new Date();
+        let currentMonth = new Date().getMonth();
+        let currentYear = new Date().getFullYear();
+        let currentWeekOffset = 0;
+
+        window.onload = function() {
+            loadData();
+            renderHeaderDate();
+            renderHabits();
+            renderCalendar();
+            renderWeeklyMatrix();
+            renderStats();
+            setupIconPicker();
+        };
+
+        function loadData() {
+            const savedHabits = localStorage.getItem('habit_tracker_habits_pro');
+            const savedLogs = localStorage.getItem('habit_tracker_logs_pro');
+
+            habits = savedHabits ? JSON.parse(savedHabits) : defaultHabits;
+            habitLogs = savedLogs ? JSON.parse(savedLogs) : {};
+        }
+
+        function saveData() {
+            localStorage.setItem('habit_tracker_habits_pro', JSON.stringify(habits));
+            localStorage.setItem('habit_tracker_logs_pro', JSON.stringify(habitLogs));
+        }
+
+        function formatDateKey(date) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        function renderHeaderDate() {
+            const optionsHeader = { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' };
+            document.getElementById('header-date').innerText = currentDate.toLocaleDateString('id-ID', optionsHeader);
+
+            const todayKey = formatDateKey(new Date());
+            const selectedKey = formatDateKey(currentDate);
+
+            let dayTitleText = "Hari Ini";
+            if (selectedKey !== todayKey) {
+                dayTitleText = currentDate > new Date() ? "Mendatang" : "Hari Lalu";
+            }
+
+            document.getElementById('current-day-title').innerText = dayTitleText;
+            const optionsSub = { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' };
+            document.getElementById('current-date-subtitle').innerText = currentDate.toLocaleDateString('id-ID', optionsSub);
+        }
+
+        function changeDate(days) {
+            currentDate.setDate(currentDate.getDate() + days);
+            renderHeaderDate();
+            renderHabits();
+        }
+
+        function renderHabits() {
+            const container = document.getElementById('habits-container');
+            container.innerHTML = '';
+
+            const dateKey = formatDateKey(currentDate);
+            if (!habitLogs[dateKey]) {
+                habitLogs[dateKey] = {};
+            }
+
+            let completedCount = 0;
+            const totalHabits = habits.length;
+
+            if (habits.length === 0) {
+                container.innerHTML = `
+                    <div class="bg-white p-8 rounded-3xl border border-slate-100 text-center text-slate-400">
+                        <i class="fa-solid fa-folder-open text-2xl mb-2 text-slate-300"></i>
+                        <p class="text-xs">Belum ada kebiasaan. Silakan tambah kebiasaan baru!</p>
+                    </div>
+                `;
+                updateProgress(0, 0);
+                return;
+            }
+
+            habits.forEach(habit => {
+                const isCompleted = !!habitLogs[dateKey][habit.id];
+                if (isCompleted) completedCount++;
+
+                const item = document.createElement('div');
+                item.className = `flex items-center justify-between p-4 rounded-2xl border transition-all duration-200 ${
+                    isCompleted 
+                        ? 'bg-emerald-50/50 border-emerald-100/80 shadow-xs' 
+                        : 'bg-white border-slate-100 hover:border-slate-200 shadow-xs'
+                }`;
+
+                item.innerHTML = `
+                    <div class="flex items-center space-x-3.5 cursor-pointer flex-grow" onclick="toggleHabit('${habit.id}')">
+                        <div class="w-10 h-10 rounded-2xl flex items-center justify-center transition-all ${
+                            isCompleted ? 'bg-emerald-500 text-white shadow-md shadow-emerald-200' : 'bg-slate-100 text-slate-500'
+                        }">
+                            <i class="fa-solid ${habit.icon || 'fa-circle-check'} text-xs"></i>
+                        </div>
+                        <span class="text-xs font-semibold select-none ${isCompleted ? 'line-through text-slate-400' : 'text-slate-800'}">${habit.name}</span>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <button onclick="toggleHabit('${habit.id}')" class="w-7 h-7 rounded-xl border flex items-center justify-center transition-all ${
+                            isCompleted ? 'bg-emerald-500 border-emerald-500 text-white shadow-xs' : 'border-slate-300 bg-white hover:border-violet-500'
+                        }">
+                            ${isCompleted ? '<i class="fa-solid fa-check text-[10px]"></i>' : ''}
+                        </button>
+                        <div class="relative group">
+                            <button class="w-7 h-7 rounded-xl text-slate-400 hover:text-slate-600 flex items-center justify-center transition">
+                                <i class="fa-solid fa-ellipsis-vertical text-xs"></i>
+                            </button>
+                            <div class="absolute right-0 mt-1 w-28 bg-white rounded-2xl shadow-xl border border-slate-100 py-1.5 hidden group-hover:block z-20">
+                                <button onclick="openEditHabitModal('${habit.id}')" class="w-full text-left px-3.5 py-1.5 text-[11px] text-slate-600 hover:bg-slate-50 flex items-center space-x-2">
+                                    <i class="fa-solid fa-pen text-[10px]"></i><span>Edit</span>
+                                </button>
+                                <button onclick="deleteHabit('${habit.id}')" class="w-full text-left px-3.5 py-1.5 text-[11px] text-rose-600 hover:bg-rose-50 flex items-center space-x-2">
+                                    <i class="fa-solid fa-trash text-[10px]"></i><span>Hapus</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(item);
+            });
+
+            updateProgress(completedCount, totalHabits);
+            calculateStreak();
+            renderCalendar();
+            renderWeeklyMatrix();
+            renderStats();
+        }
+
+        function toggleHabit(habitId) {
+            const dateKey = formatDateKey(currentDate);
+            if (!habitLogs[dateKey]) {
+                habitLogs[dateKey] = {};
+            }
+            habitLogs[dateKey][habitId] = !habitLogs[dateKey][habitId];
+            saveData();
+            renderHabits();
+        }
+
+        function updateProgress(completed, total) {
+            const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+            document.getElementById('progress-text').innerText = `${completed}/${total} selesai — ${percent}%`;
+            document.getElementById('progress-bar-fill').style.width = `${percent}%`;
+        }
+
+        function calculateStreak() {
+            let streak = 0;
+            let checkDate = new Date();
+            
+            while (true) {
+                const dateKey = formatDateKey(checkDate);
+                const dayLog = habitLogs[dateKey];
+                const totalHabits = habits.length;
+
+                if (totalHabits === 0) break;
+
+                let completedCount = 0;
+                habits.forEach(h => {
+                    if (dayLog && dayLog[h.id]) completedCount++;
+                });
+
+                if (completedCount === totalHabits && totalHabits > 0) {
+                    streak++;
+                    checkDate.setDate(checkDate.getDate() - 1);
+                } else {
+                    const todayKey = formatDateKey(new Date());
+                    if (dateKey === todayKey) {
+                        checkDate.setDate(checkDate.getDate() - 1);
+                        continue;
+                    }
+                    break;
+                }
+            }
+
+            document.getElementById('streak-count').innerText = `🔥 ${streak} Hari`;
+            return streak;
+        }
+
+        function switchTab(tabName) {
+            const trackerTab = document.getElementById('tab-tracker');
+            const weeklyTab = document.getElementById('tab-weekly');
+            const historyTab = document.getElementById('tab-history');
+            
+            const navTracker = document.getElementById('nav-tracker');
+            const navWeekly = document.getElementById('nav-weekly');
+            const navHistory = document.getElementById('nav-history');
+
+            trackerTab.classList.add('hidden');
+            weeklyTab.classList.add('hidden');
+            historyTab.classList.add('hidden');
+            
+            navTracker.className = "px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:text-slate-800 transition-all";
+            navWeekly.className = "px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:text-slate-800 transition-all";
+            navHistory.className = "px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:text-slate-800 transition-all";
+
+            if (tabName === 'tracker') {
+                trackerTab.classList.remove('hidden');
+                navTracker.className = "px-3 py-1.5 rounded-lg text-xs font-semibold bg-white text-slate-800 shadow-xs transition-all";
+            } else if (tabName === 'weekly') {
+                weeklyTab.classList.remove('hidden');
+                navWeekly.className = "px-3 py-1.5 rounded-lg text-xs font-semibold bg-white text-slate-800 shadow-xs transition-all";
+                renderWeeklyMatrix();
+            } else {
+                historyTab.classList.remove('hidden');
+                navHistory.className = "px-3 py-1.5 rounded-lg text-xs font-semibold bg-white text-slate-800 shadow-xs transition-all";
+                renderCalendar();
+            }
+        }
+
+        function changeWeek(direction) {
+            currentWeekOffset += direction;
+            renderWeeklyMatrix();
+        }
+
+        function renderWeeklyMatrix() {
+            const container = document.getElementById('weekly-matrix');
+            container.innerHTML = '';
+
+            let d = new Date();
+            d.setDate(d.getDate() + (currentWeekOffset * 7));
+            const dayOfWeek = d.getDay();
+            const diffToMon = d.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+            
+            let monday = new Date(d.setDate(diffToMon));
+            let weekDays = [];
+            for (let i = 0; i < 7; i++) {
+                let tempD = new Date(monday);
+                tempD.setDate(monday.getDate() + i);
+                weekDays.push(tempD);
+            }
+
+            const options = { day: 'numeric', month: 'short' };
+            document.getElementById('weekly-range-subtitle').innerText = `${weekDays[0].toLocaleDateString('id-ID', options)} — ${weekDays[6].toLocaleDateString('id-ID', options)} ${weekDays[6].getFullYear()}`;
+
+            let headerHtml = `<div class="grid grid-cols-8 gap-1 items-center pb-2 border-b border-slate-100">
+                <div class="text-[11px] font-bold text-slate-400">Kebiasaan</div>`;
+            
+            const dayNames = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'];
+            weekDays.forEach((wDate, idx) => {
+                const isToday = formatDateKey(wDate) === formatDateKey(new Date());
+                headerHtml += `<div class="text-center">
+                    <span class="block text-[10px] text-slate-400 uppercase">${dayNames[idx]}</span>
+                    <span class="inline-block text-xs font-bold ${isToday ? 'bg-violet-600 text-white w-6 h-6 rounded-full leading-6' : 'text-slate-700'}">${wDate.getDate()}</span>
+                </div>`;
+            });
+            headerHtml += `</div>`;
+            container.innerHTML += headerHtml;
+
+            if (habits.length === 0) {
+                container.innerHTML += `<div class="text-center py-6 text-xs text-slate-400">Belum ada kebiasaan untuk ditampilkan.</div>`;
+                return;
+            }
+
+            habits.forEach(habit => {
+                let rowHtml = `<div class="grid grid-cols-8 gap-1 items-center py-1.5 border-b border-slate-50">
+                    <div class="flex items-center space-x-2 pr-2">
+                        <div class="w-7 h-7 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center shrink-0">
+                            <i class="fa-solid ${habit.icon || 'fa-circle-check'} text-[10px]"></i>
+                        </div>
+                        <span class="text-xs font-medium text-slate-700 truncate">${habit.name}</span>
+                    </div>`;
+
+                weekDays.forEach(wDate => {
+                    const dateKey = formatDateKey(wDate);
+                    const isChecked = habitLogs[dateKey] && habitLogs[dateKey][habit.id];
+
+                    rowHtml += `<div class="flex justify-center">
+                        <button onclick="toggleWeeklyCell('${dateKey}', '${habit.id}')" class="w-7 h-7 rounded-xl border transition-all flex items-center justify-center ${
+                            isChecked ? 'bg-emerald-500 border-emerald-500 text-white shadow-xs' : 'border-slate-200 bg-slate-50/50 hover:border-violet-400'
+                        }">
+                            ${isChecked ? '<i class="fa-solid fa-check text-[10px]"></i>' : ''}
+                        </button>
+                    </div>`;
+                });
+
+                rowHtml += `</div>`;
+                container.innerHTML += rowHtml;
+            });
+        }
+
+        function toggleWeeklyCell(dateKey, habitId) {
+            if (!habitLogs[dateKey]) {
+                habitLogs[dateKey] = {};
+            }
+            habitLogs[dateKey][habitId] = !habitLogs[dateKey][habitId];
+            saveData();
+            renderWeeklyMatrix();
+            renderHabits();
+            renderCalendar();
+            renderStats();
+        }
+
+        function renderCalendar() {
+            const grid = document.getElementById('calendar-grid');
+            grid.innerHTML = '';
+
+            const monthNames = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+            document.getElementById('calendar-month-year').innerText = `${monthNames[currentMonth]} ${currentYear}`;
+
+            const firstDayIndex = new Date(currentYear, currentMonth, 1).getDay();
+            let startingSpace = firstDayIndex === 0 ? 6 : firstDayIndex - 1;
+            const totalDays = new Date(currentYear, currentMonth + 1, 0).getDate();
+
+            for (let i = 0; i < startingSpace; i++) {
+                const emptyDiv = document.createElement('div');
+                emptyDiv.className = "h-10";
+                grid.appendChild(emptyDiv);
+            }
+
+            for (let day = 1; day <= totalDays; day++) {
+                const dateObj = new Date(currentYear, currentMonth, day);
+                const dateKey = formatDateKey(dateObj);
+                const dayLog = habitLogs[dateKey] || {};
+                
+                let completedCount = 0;
+                habits.forEach(h => {
+                    if (dayLog[h.id]) completedCount++;
+                });
+
+                const totalHabits = habits.length;
+                let bgClass = "bg-slate-50 text-slate-600 border border-slate-100/80 hover:bg-slate-100";
+                
+                if (totalHabits > 0 && completedCount === totalHabits) {
+                    bgClass = "bg-emerald-500 text-white font-bold shadow-sm shadow-emerald-200";
+                } else if (completedCount > 0) {
+                    bgClass = "bg-violet-100 text-violet-800 font-medium border border-violet-200/60";
+                }
+
+                const dayDiv = document.createElement('div');
+                dayDiv.className = `h-10 rounded-2xl flex flex-col items-center justify-center text-xs transition-all cursor-pointer ${bgClass}`;
+                dayDiv.innerHTML = `<span>${day}</span>`;
+                dayDiv.onclick = () => {
+                    currentDate = dateObj;
+                    renderHeaderDate();
+                    renderHabits();
+                    switchTab('tracker');
+                };
+                grid.appendChild(dayDiv);
+            }
+        }
+
+        function changeMonth(direction) {
+            currentMonth += direction;
+            if (currentMonth > 11) {
+                currentMonth = 0;
+                currentYear++;
+            } else if (currentMonth < 0) {
+                currentMonth = 11;
+                currentYear--;
+            }
+            renderCalendar();
+        }
+
+        function renderStats() {
+            let totalCompletedAll = 0;
+            Object.keys(habitLogs).forEach(dateKey => {
+                const dayLog = habitLogs[dateKey];
+                habits.forEach(h => {
+                    if (dayLog[h.id]) totalCompletedAll++;
+                });
+            });
+
+            document.getElementById('stat-total-completed').innerText = totalCompletedAll;
+            let currentStreak = calculateStreak();
+            document.getElementById('stat-current-streak').innerText = `${currentStreak} Hari`;
+        }
+
+        function setupIconPicker() {
+            const picker = document.getElementById('icon-picker');
+            picker.innerHTML = '';
+            availableIcons.forEach(icon => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = `w-10 h-10 rounded-2xl border flex items-center justify-center text-slate-600 hover:bg-slate-50 transition icon-option`;
+                btn.innerHTML = `<i class="fa-solid ${icon} text-xs"></i>`;
+                btn.onclick = () => {
+                    document.querySelectorAll('.icon-option').forEach(b => b.classList.remove('border-violet-600', 'bg-violet-50', 'text-violet-600'));
+                    btn.classList.add('border-violet-600', 'bg-violet-50', 'text-violet-600');
+                    document.getElementById('selected-icon').value = icon;
+                };
+                picker.appendChild(btn);
+            });
+            if(picker.children.length > 0) {
+                picker.children[0].click();
+            }
+        }
+
+        function openAddHabitModal() {
+            document.getElementById('modal-title').innerText = "Tambah Kebiasaan Baru";
+            document.getElementById('edit-habit-id').value = "";
+            document.getElementById('habit-name-input').value = "";
+            document.getElementById('habit-modal').classList.remove('hidden');
+        }
+
+        function openEditHabitModal(id) {
+            const habit = habits.find(h => h.id === id);
+            if (!habit) return;
+
+            document.getElementById('modal-title').innerText = "Edit Kebiasaan";
+            document.getElementById('edit-habit-id').value = habit.id;
+            document.getElementById('habit-name-input').value = habit.name;
+            document.getElementById('selected-icon').value = habit.icon || 'fa-circle-check';
+
+            document.querySelectorAll('.icon-option').forEach(b => {
+                const iconClass = b.querySelector('i').className;
+                if (iconClass.includes(habit.icon)) {
+                    b.click();
+                }
+            });
+
+            document.getElementById('habit-modal').classList.remove('hidden');
+        }
+
+        function closeHabitModal() {
+            document.getElementById('habit-modal').classList.add('hidden');
+        }
+
+        function saveHabit() {
+            const id = document.getElementById('edit-habit-id').value;
+            const name = document.getElementById('habit-name-input').value.trim();
+            const icon = document.getElementById('selected-icon').value;
+
+            if (!name) {
+                showToast("Nama kebiasaan tidak boleh kosong!", "error");
+                return;
+            }
+
+            if (id) {
+                const habit = habits.find(h => h.id === id);
+                if (habit) {
+                    habit.name = name;
+                    habit.icon = icon;
+                }
+                showToast("Kebiasaan berhasil diperbarui!");
+            } else {
+                const newHabit = {
+                    id: Date.now().toString(),
+                    name: name,
+                    icon: icon
+                };
+                habits.push(newHabit);
+                showToast("Kebiasaan baru ditambahkan!");
+            }
+
+            saveData();
+            renderHabits();
+            renderWeeklyMatrix();
+            closeHabitModal();
+        }
+
+        function deleteHabit(id) {
+            if (confirm("Apakah Anda yakin ingin menghapus kebiasaan ini?")) {
+                habits = habits.filter(h => h.id !== id);
+                saveData();
+                renderHabits();
+                renderWeeklyMatrix();
+                showToast("Kebiasaan dihapus.");
+            }
+        }
+
+        function showToast(message, type = "success") {
+            const toast = document.getElementById('toast-notification');
+            const toastMsg = document.getElementById('toast-message');
+            const toastIcon = document.getElementById('toast-icon');
+
+            toastMsg.innerText = message;
+            if (type === "error") {
+                toastIcon.className = "fa-solid fa-circle-exclamation text-rose-400";
+            } else {
+                toastIcon.className = "fa-solid fa-circle-check text-emerald-400";
+            }
+
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            setTimeout(() => {
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 2500);
+        }
+    </script>
+</body>
+</html>
